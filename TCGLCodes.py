@@ -1,9 +1,12 @@
+import sys
 import time
 import random
 import undetected_chromedriver as uc
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QFileDialog, QVBoxLayout, QMessageBox
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+import pygetwindow as gw
 
 def safe_click(driver, by, value):
     try:
@@ -18,85 +21,112 @@ def safe_click(driver, by, value):
 def random_sleep(min_seconds, max_seconds):
     time.sleep(random.uniform(min_seconds, max_seconds))
 
-# Read text from text file
-with open("codes.txt", "r") as file:
-    text_to_input = file.read()
+class RedeemApp(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
 
-text_parts = text_to_input.split("\n")
-print(f"Total {len(text_parts)} codes.")
+    def initUI(self):
+        self.setWindowTitle('Code Redemption Tool')
 
-user_decision = input("Would you like to continue? (y/n): ")
+        layout = QVBoxLayout()
 
-if user_decision.lower() != 'y':
-    print("Terminating the script.")
-    exit(0)
+        self.username_label = QLabel('Username:')
+        self.username_input = QLineEdit(self)
+        layout.addWidget(self.username_label)
+        layout.addWidget(self.username_input)
 
-# Get username and password from user
-username = input("Enter your username: ")
-password = input("Enter your password: ")
+        self.password_label = QLabel('Password:')
+        self.password_input = QLineEdit(self)
+        self.password_input.setEchoMode(QLineEdit.Password)
+        layout.addWidget(self.password_label)
+        layout.addWidget(self.password_input)
 
-# Initialize undetected Chrome driver
-options = uc.ChromeOptions()
-options.add_argument("--disable-blink-features=AutomationControlled")
-driver = uc.Chrome(options=options)
-wait = WebDriverWait(driver, 10)
+        self.file_label = QLabel('Select Codes File:')
+        self.file_button = QPushButton('Browse', self)
+        self.file_button.clicked.connect(self.showFileDialog)
+        layout.addWidget(self.file_label)
+        layout.addWidget(self.file_button)
 
-# Initialize counters
-i = 0
-j = 0
+        self.start_button = QPushButton('Start', self)
+        self.start_button.clicked.connect(self.start_redemption)
+        layout.addWidget(self.start_button)
 
-try:
-    # Navigate to the login page
-    driver.get("https://redeem.tcg.pokemon.com/en-us/")
-    random_sleep(1, 2)
+        self.setLayout(layout)
 
-    # Find the username and password fields
-    username_elem = wait.until(EC.presence_of_element_located((By.ID, "email")))
-    password_elem = wait.until(EC.presence_of_element_located((By.ID, "password")))
+    def showFileDialog(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.ReadOnly
+        fileName, _ = QFileDialog.getOpenFileName(self, "Open Codes File", "", "Text Files (*.txt);;All Files (*)", options=options)
+        if fileName:
+            self.file_label.setText(fileName)
 
-    username_elem.send_keys(username)
-    password_elem.send_keys(password)
-    random_sleep(1, 2)
+    def start_redemption(self):
+        username = self.username_input.text()
+        password = self.password_input.text()
+        file_path = self.file_label.text()
 
-    # Find and click the login button
-    safe_click(driver, By.ID, 'accept')
-    random_sleep(10, 12)
+        if not username or not password or not file_path:
+            QMessageBox.warning(self, 'Input Error', 'Please provide all inputs.')
+            return
 
-    # Wait for the cookie popup's "Accept" button to appear and click
-    safe_click(driver, By.XPATH, "//button[text()='Accept All']")
-    random_sleep(2, 3)
+        with open(file_path, 'r') as file:
+            text_to_input = file.read()
+        
+        text_parts = text_to_input.split('\n')
+        print(f"Total {len(text_parts)} codes.")
 
-    for part in text_parts:
+        options = uc.ChromeOptions()
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        driver = uc.Chrome(options=options)
+        wait = WebDriverWait(driver, 10)
+
         try:
-            text_field = wait.until(EC.presence_of_element_located((By.ID, "code")))
-            text_field.clear()
-            text_field.send_keys(part)
+            driver.get("https://redeem.tcg.pokemon.com/en-us/")
             random_sleep(1, 2)
 
-            # Submit the code
-            safe_click(driver, By.CSS_SELECTOR, ".Button_blueButton__1PlZZ.VerifyModule_verifySubmitButton__3zBd-")
-            random_sleep(3, 4)
+            username_elem = wait.until(EC.presence_of_element_located((By.ID, "email")))
+            password_elem = wait.until(EC.presence_of_element_located((By.ID, "password")))
 
-            elements = driver.find_elements(By.XPATH, "//td[text()='This code has already been redeemed by this account. ']")
+            username_elem.send_keys(username)
+            password_elem.send_keys(password)
+            random_sleep(1, 2)
 
-            if len(elements) == 0:
-                # Click the Redeem button
-                safe_click(driver, By.XPATH, "//button/span[text()='Redeem']")
-                i += 1
-                print(f"{i} codes redeemed")
-                random_sleep(4, 5)
-            else:
-                print("This code has already been redeemed. Skipping.")
-                driver.refresh()
-                j += 1
-                print(f"{j} codes failed")
-                elements = []
-                random_sleep(2, 3)
-        except Exception as e:
-            print(f"An error occurred during code redemption: {e}")
+            safe_click(driver, By.ID, 'accept')
+            random_sleep(10, 12)
 
-finally:
-    driver.quit()
-    print("Complete")
-    print(f"{i} total codes redeemed")
-    print(f"{j} total codes failed")
+            safe_click(driver, By.XPATH, "//button[text()='Accept All']")
+            random_sleep(2, 3)
+
+            for part in text_parts:
+                try:
+                    text_field = wait.until(EC.presence_of_element_located((By.ID, "code")))
+                    text_field.clear()
+                    text_field.send_keys(part)
+                    random_sleep(1, 2)
+
+                    safe_click(driver, By.CSS_SELECTOR, ".Button_blueButton__1PlZZ.VerifyModule_verifySubmitButton__3zBd-")
+                    random_sleep(3, 4)
+
+                    elements = driver.find_elements(By.XPATH, "//td[text()='This code has already been redeemed by this account. ']")
+
+                    if len(elements) == 0:
+                        safe_click(driver, By.XPATH, "//button/span[text()='Redeem']")
+                        print("Code redeemed")
+                        random_sleep(4, 5)
+                    else:
+                        print("This code has already been redeemed. Skipping.")
+                        driver.refresh()
+                        random_sleep(2, 3)
+                except Exception as e:
+                    print(f"An error occurred during code redemption: {e}")
+
+        finally:
+            driver.quit()
+            QMessageBox.information(self, 'Redemption Complete', 'Code redemption process is complete.')
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    ex = RedeemApp()
+    ex.show()
+    sys.exit(app.exec_())
