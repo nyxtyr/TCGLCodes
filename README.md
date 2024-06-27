@@ -1,8 +1,12 @@
 # TCGLCodes
-This python program will validate and submit PTCGL codes.
+Discover the ultimate tool for validating and submitting PTCGL codes with ease! This Python script is designed to accelerate code redemption processes, ensuring quick and accurate validation.
 
 # Work in Progress
-There are lots of features planned for this. More updates and details coming soon.
+There are lots of features planned for this. More updates and details coming soon. Stay tuned for further enhancements!
+
+Planned: Featuring intuitive QR code scanning capabilities for effortless input.
+Planned: A robust sorting options for efficient code organization.
+Planned: A login file to save multiple username:passwords. 
 
 # Requirements
 1) Create a Pokemon Trainer Club account https://join.pokemon.com/
