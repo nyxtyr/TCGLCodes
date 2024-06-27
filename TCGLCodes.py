@@ -1,4 +1,5 @@
 import time
+import random
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -40,6 +41,10 @@ options.add_argument("--disable-blink-features=AutomationControlled")
 driver = uc.Chrome(options=options)
 wait = WebDriverWait(driver, 10)
 
+# Initialize counters
+i = 0
+j = 0
+
 try:
     # Navigate to the login page
     driver.get("https://redeem.tcg.pokemon.com/en-us/")
@@ -61,8 +66,6 @@ try:
     safe_click(driver, By.XPATH, "//button[text()='Accept All']")
     random_sleep(2, 3)
 
-    i = 0
-    j = 0
     for part in text_parts:
         try:
             text_field = wait.until(EC.presence_of_element_located((By.ID, "code")))
