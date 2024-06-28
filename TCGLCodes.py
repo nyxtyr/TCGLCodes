@@ -1,12 +1,11 @@
-import sys
 import time
 import random
-import undetected_chromedriver as uc
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QFileDialog, QVBoxLayout, QMessageBox
+import os
+from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import pygetwindow as gw
+from selenium.common.exceptions import TimeoutException
 
 def safe_click(driver, by, value):
     try:
@@ -15,118 +14,88 @@ def safe_click(driver, by, value):
         )
         driver.execute_script("arguments[0].scrollIntoView();", element)
         driver.execute_script("arguments[0].click();", element)
+    except TimeoutException:
+        print(f"Timeout while waiting for element to be clickable: {by}={value}")
     except Exception as e:
-        print(f"An error occurred while attempting to click on the element: {e}")
+        print(f"An error occurred while attempting to click on the element {by}={value}: {e}")
 
 def random_sleep(min_seconds, max_seconds):
     time.sleep(random.uniform(min_seconds, max_seconds))
 
-class RedeemApp(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.initUI()
+def move_code_to_used(code):
+    with open("codes-new.txt", "r") as f:
+        lines = f.readlines()
 
-    def initUI(self):
-        self.setWindowTitle('Code Redemption Tool')
+    with open("codes-new.txt", "w") as f:
+        for line in lines:
+            if line.strip() != code:
+                f.write(line)
 
-        layout = QVBoxLayout()
+    with open("codes-used.txt", "a") as f:
+        f.write(code + "\n")
 
-        self.username_label = QLabel('Username:')
-        self.username_input = QLineEdit(self)
-        layout.addWidget(self.username_label)
-        layout.addWidget(self.username_input)
+def move_code_to_bad(code):
+    with open("codes-new.txt", "r") as f:
+        lines = f.readlines()
 
-        self.password_label = QLabel('Password:')
-        self.password_input = QLineEdit(self)
-        self.password_input.setEchoMode(QLineEdit.Password)
-        layout.addWidget(self.password_label)
-        layout.addWidget(self.password_input)
+    with open("codes-new.txt", "w") as f:
+        for line in lines:
+            if line.strip() != code:
+                f.write(line)
 
-        self.file_label = QLabel('Select Codes File:')
-        self.file_button = QPushButton('Browse', self)
-        self.file_button.clicked.connect(self.showFileDialog)
-        layout.addWidget(self.file_label)
-        layout.addWidget(self.file_button)
+    with open("codes-bad.txt", "a") as f:
+        f.write(code + "\n")
 
-        self.start_button = QPushButton('Start', self)
-        self.start_button.clicked.connect(self.start_redemption)
-        layout.addWidget(self.start_button)
+def main(file_path):
+    with open(file_path, 'r') as file:
+        text_to_input = file.read()
 
-        self.setLayout(layout)
+    text_parts = text_to_input.split('\n')
+    print(f"Total {len(text_parts)} codes.")
 
-    def showFileDialog(self):
-        options = QFileDialog.Options()
-        options |= QFileDialog.ReadOnly
-        fileName, _ = QFileDialog.getOpenFileName(self, "Open Codes File", "", "Text Files (*.txt);;All Files (*)", options=options)
-        if fileName:
-            self.file_label.setText(fileName)
+    options = webdriver.ChromeOptions()
+    options.debugger_address = "localhost:9222"
+    driver = webdriver.Chrome(options=options)
+    wait = WebDriverWait(driver, 10)
 
-    def start_redemption(self):
-        username = self.username_input.text()
-        password = self.password_input.text()
-        file_path = self.file_label.text()
+    try:
+        driver.get("https://redeem.tcg.pokemon.com/en-us/")
+        random_sleep(1, 2)
 
-        if not username or not password or not file_path:
-            QMessageBox.warning(self, 'Input Error', 'Please provide all inputs.')
-            return
+        for part in text_parts:
+            try:
+                text_field = wait.until(EC.presence_of_element_located((By.ID, "code")))
+                text_field.clear()
+                text_field.send_keys(part)
+                random_sleep(1, 2)
 
-        with open(file_path, 'r') as file:
-            text_to_input = file.read()
-        
-        text_parts = text_to_input.split('\n')
-        print(f"Total {len(text_parts)} codes.")
+                safe_click(driver, By.CSS_SELECTOR, ".Button_blueButton__1PlZZ.VerifyModule_verifySubmitButton__3zBd-")
+                random_sleep(3, 4)
 
-        options = uc.ChromeOptions()
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        driver = uc.Chrome(options=options)
-        wait = WebDriverWait(driver, 10)
+                # Check if the code has already been redeemed
+                elements = driver.find_elements(By.XPATH, "//td[contains(@class, 'RedeemModule_tdLocalizedName__1VWAC')]")
 
-        try:
-            driver.get("https://redeem.tcg.pokemon.com/en-us/")
-            random_sleep(1, 2)
+                if any("That code has already been redeemed." in elem.text for elem in elements):
+                    print(f"This code '{part}' has already been redeemed. Moving to bad codes.")
+                    move_code_to_bad(part.strip())  # Move the bad code to codes-bad.txt
+                    
+                    # Click the delete button for the bad code
+                    delete_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, ".RedeemModule_tdDelete__2-YLO")))
+                    safe_click(driver, By.CSS_SELECTOR, ".RedeemModule_tdDelete__2-YLO")
+                    random_sleep(2, 3)
+                else:
+                    safe_click(driver, By.XPATH, "//button/span[text()='Redeem']")
+                    print(f"Code '{part}' redeemed")
+                    move_code_to_used(part.strip())  # Move the used code to codes-used.txt
+                    random_sleep(4, 5)
 
-            username_elem = wait.until(EC.presence_of_element_located((By.ID, "email")))
-            password_elem = wait.until(EC.presence_of_element_located((By.ID, "password")))
+            except Exception as e:
+                print(f"An error occurred during code redemption for '{part}': {e}")
 
-            username_elem.send_keys(username)
-            password_elem.send_keys(password)
-            random_sleep(1, 2)
-
-            safe_click(driver, By.ID, 'accept')
-            random_sleep(10, 12)
-
-            safe_click(driver, By.XPATH, "//button[text()='Accept All']")
-            random_sleep(2, 3)
-
-            for part in text_parts:
-                try:
-                    text_field = wait.until(EC.presence_of_element_located((By.ID, "code")))
-                    text_field.clear()
-                    text_field.send_keys(part)
-                    random_sleep(1, 2)
-
-                    safe_click(driver, By.CSS_SELECTOR, ".Button_blueButton__1PlZZ.VerifyModule_verifySubmitButton__3zBd-")
-                    random_sleep(3, 4)
-
-                    elements = driver.find_elements(By.XPATH, "//td[text()='This code has already been redeemed by this account. ']")
-
-                    if len(elements) == 0:
-                        safe_click(driver, By.XPATH, "//button/span[text()='Redeem']")
-                        print("Code redeemed")
-                        random_sleep(4, 5)
-                    else:
-                        print("This code has already been redeemed. Skipping.")
-                        driver.refresh()
-                        random_sleep(2, 3)
-                except Exception as e:
-                    print(f"An error occurred during code redemption: {e}")
-
-        finally:
-            driver.quit()
-            QMessageBox.information(self, 'Redemption Complete', 'Code redemption process is complete.')
+    finally:
+        driver.quit()
+        print('Code redemption process is complete.')
 
 if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    ex = RedeemApp()
-    ex.show()
-    sys.exit(app.exec_())
+    file_path = "codes-new.txt"  # Assuming codes file path is fixed as 'codes-new.txt'
+    main(file_path)
