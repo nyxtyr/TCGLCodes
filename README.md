@@ -18,7 +18,7 @@ Planned: A login file to save multiple username:passwords.
 2) Extract zip
 3) Right click in extract folder
 4) Click "Open in Terminal"
-5) Open Chrome browser
+5) Open Chrome browser using Target: "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\Users\YOURUSER\AppData\Local\Google\Chrome\User Data\"
 6) Navigation to https://redeem.tcg.pokemon.com/en-us/
 7) Login
 8) Type "python TCGLCodes.py" in the terminal
